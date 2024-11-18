@@ -43,6 +43,8 @@ dependencies:
   syncfusion_flutter_pdf:
   path_provider:
   permission_handler:
+  location: ^7.0.1
+  device_info_plus: ^11.1.1
 
 dev_dependencies:
   flutter_test:

@@ -2,13 +2,13 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:excel/excel.dart';
+import 'package:extract_text_demo/permissionHandler.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:html/parser.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 void main() {
@@ -95,21 +95,15 @@ class _FileTextExtractorState extends State<FileTextExtractor> {
   // Save edited text to a file
   Future<void> saveTextToFile() async {
     // Request permission to write to storage (for Android)
-    PermissionStatus status = await Permission.storage.request();
-    if (status.isGranted) {
-      final directory = await getExternalStorageDirectory();
-      final filePath = '${directory!.path}/extracted_text.txt';
-      final file = File(filePath);
-      await file.writeAsString(textController.text);
+    //PermissionStatus status = await Permission.storage.request();
+    final directory = await getExternalStorageDirectory();
+    final filePath = '${directory!.path}/extracted_text_${DateTime.now()}.txt';
+    final file = File(filePath);
+    await file.writeAsString(textController.text);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('File saved at $filePath')),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Permission denied!')),
-      );
-    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('File saved at $filePath')),
+    );
   }
 
   // Extract text from PDF
@@ -172,6 +166,7 @@ class _FileTextExtractorState extends State<FileTextExtractor> {
 
   @override
   Widget build(BuildContext context) {
+    storagePermission();
     return Scaffold(
       appBar: AppBar(
         title: const Text("File Text Extractor"),
