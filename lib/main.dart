@@ -3,28 +3,21 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
+import 'package:get/get.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 void main() {
-  runApp(const MaterialApp(
+  runApp(const GetMaterialApp(
     home: FileTextExtractor(),
   ));
 }
 
-class FileTextExtractor extends StatefulWidget {
-  const FileTextExtractor({Key? key}) : super(key: key);
+class FileTextExtractorController extends GetxController {
+  var extractedText = "Choose a file to extract text".obs;
+  var isLoading = false.obs;
 
-  @override
-  State<FileTextExtractor> createState() => _FileTextExtractorState();
-}
-
-class _FileTextExtractorState extends State<FileTextExtractor> {
-  String extractedText = "Choose a file to extract text";
-  bool isLoading = false;
-
-  // Pick file from device
   Future<void> pickFile() async {
     final result = await FilePicker.platform.pickFiles();
     if (result != null && result.files.single.path != null) {
@@ -33,11 +26,8 @@ class _FileTextExtractorState extends State<FileTextExtractor> {
     }
   }
 
-  // Process the file and extract text
   Future<void> processFile(String filePath) async {
-    setState(() {
-      isLoading = true;
-    });
+    isLoading(true);
 
     try {
       String fileExtension = filePath.split('.').last.toLowerCase();
@@ -59,25 +49,15 @@ class _FileTextExtractorState extends State<FileTextExtractor> {
           text = "Unsupported file type: $fileExtension";
       }
 
-      // Navigate to the full-page editor with Quill
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => QuillEditorPage(initialText: text),
-        ),
-      );
+      // Navigate to the Quill Editor Page
+      Get.to(() => QuillEditorPage(), arguments: text);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
+      Get.snackbar("Error", e.toString());
     } finally {
-      setState(() {
-        isLoading = false;
-      });
+      isLoading(false);
     }
   }
 
-  // Extract text from PDF
   Future<String> extractTextWithSyncfusion(String filePath) async {
     final fileBytes = await File(filePath).readAsBytes();
     final PdfDocument document = PdfDocument(inputBytes: fileBytes);
@@ -93,7 +73,6 @@ class _FileTextExtractorState extends State<FileTextExtractor> {
     return extractedText;
   }
 
-  // Extract text from Image
   Future<String> extractTextFromImage(String filePath) async {
     final inputImage = InputImage.fromFilePath(filePath);
     final textRecognizer = TextRecognizer();
@@ -101,71 +80,60 @@ class _FileTextExtractorState extends State<FileTextExtractor> {
     return recognizedText.text;
   }
 
-  // Extract text from Txt
   Future<String> extractTextFromTxt(String filePath) async {
     final file = File(filePath);
     return await file.readAsString();
   }
+}
+
+class FileTextExtractor extends StatelessWidget {
+  const FileTextExtractor({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    final controller = Get.put(FileTextExtractorController());
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("File Text Extractor"),
       ),
-      body: Stack(
-        children: [
-          Center(
-            child: ElevatedButton(
-              onPressed: pickFile,
-              child: const Text("Choose File"),
-            ),
-          ),
-          if (isLoading)
-            Container(
-              color: Colors.black54,
-              child: const Center(
-                child: CircularProgressIndicator(),
+      body: Obx(
+        () => Stack(
+          children: [
+            Center(
+              child: ElevatedButton(
+                onPressed: controller.pickFile,
+                child: const Text("Choose File"),
               ),
             ),
-        ],
+            if (controller.isLoading.value)
+              Container(
+                color: Colors.black54,
+                child: const Center(
+                  child: CircularProgressIndicator(),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
 }
 
-// Quill Editor Page
-class QuillEditorPage extends StatefulWidget {
-  final String initialText;
+class QuillEditorController extends GetxController {
+  late quill.QuillController quillController;
+  var showAndroidKeyboard = true.obs;
 
-  const QuillEditorPage({Key? key, required this.initialText})
-      : super(key: key);
-
-  @override
-  State<QuillEditorPage> createState() => _QuillEditorPageState();
-}
-
-class _QuillEditorPageState extends State<QuillEditorPage> {
-  late quill.QuillController _controller;
-  bool showAndroidKeyboard = true;
-  final FocusNode _androidFocusNode = FocusNode();
-  final FocusNode _customFocusNode = AlwaysDisabledFocusNode();
+  final FocusNode androidFocusNode = FocusNode();
+  final FocusNode customFocusNode = AlwaysDisabledFocusNode();
 
   @override
-  void dispose() {
-    _androidFocusNode.dispose();
-    _customFocusNode.dispose();
-    super.dispose();
-  }
-
-  @override
-  void initState() {
-    super.initState();
-
-    // Initialize QuillController with the extracted text
+  void onInit() {
+    super.onInit();
+    String initialText = Get.arguments ?? '';
     final doc = quill.Document();
-    doc.insert(0, widget.initialText);
-    _controller = quill.QuillController(
+    doc.insert(0, initialText);
+    quillController = quill.QuillController(
       document: doc,
       selection: const TextSelection.collapsed(offset: 0),
     );
@@ -177,37 +145,45 @@ class _QuillEditorPageState extends State<QuillEditorPage> {
         '${directory!.path}/edited_text_${DateTime.now().millisecondsSinceEpoch}.txt';
     final file = File(filePath);
 
-    final plainText = _controller.document.toPlainText();
+    final plainText = quillController.document.toPlainText();
     await file.writeAsString(plainText);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('File saved at $filePath')),
-    );
+    Get.snackbar("Success", "File saved at $filePath");
   }
 
   @override
+  void onClose() {
+    androidFocusNode.dispose();
+    customFocusNode.dispose();
+    super.onClose();
+  }
+}
+
+class QuillEditorPage extends StatelessWidget {
+  @override
   Widget build(BuildContext context) {
+    final controller = Get.put(QuillEditorController());
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Edit Extracted Text"),
         actions: [
           IconButton(
-            onPressed: saveEditedText,
+            onPressed: controller.saveEditedText,
             icon: const Icon(Icons.save),
           ),
           IconButton(
-              onPressed: () {
-                setState(() {
-                  showAndroidKeyboard = !showAndroidKeyboard;
+            onPressed: () {
+              controller.showAndroidKeyboard.toggle();
 
-                  if (!showAndroidKeyboard) {
-                    FocusScope.of(context).unfocus(); // Hides the keyboard
-                  }
-                });
-              },
-              icon: Icon(showAndroidKeyboard
-                  ? Icons.keyboard_alt
-                  : Icons.keyboard_alt_outlined))
+              if (!controller.showAndroidKeyboard.value) {
+                FocusScope.of(context).unfocus();
+              }
+            },
+            icon: Obx(() => Icon(controller.showAndroidKeyboard.value
+                ? Icons.keyboard_alt
+                : Icons.keyboard_alt_outlined)),
+          ),
         ],
       ),
       body: Padding(
@@ -219,22 +195,23 @@ class _QuillEditorPageState extends State<QuillEditorPage> {
             borderRadius: BorderRadius.circular(8),
           ),
           child: SingleChildScrollView(
-            child: quill.QuillEditor(
-              controller: _controller,
-              scrollController: ScrollController(),
-              focusNode:
-                  showAndroidKeyboard ? _androidFocusNode : _customFocusNode,
-              // padding: const EdgeInsets.all(8.0),
-            ),
+            child: Obx(() => quill.QuillEditor(
+                  controller: controller.quillController,
+                  scrollController: ScrollController(),
+                  focusNode: controller.showAndroidKeyboard.value
+                      ? controller.androidFocusNode
+                      : controller.customFocusNode,
+                )),
           ),
         ),
       ),
-      bottomNavigationBar: quill.QuillToolbar.simple(controller: _controller),
+      bottomNavigationBar:
+          quill.QuillToolbar.simple(controller: controller.quillController),
     );
   }
 }
 
 class AlwaysDisabledFocusNode extends FocusNode {
   @override
-  bool get hasFocus => false; // Prevents the keyboard from opening
+  bool get hasFocus => false;
 }

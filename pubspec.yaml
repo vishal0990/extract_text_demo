@@ -46,6 +46,7 @@ dependencies:
   location: ^7.0.1
   device_info_plus: ^11.1.1
   flutter_quill:
+  get:
 
 dev_dependencies:
   flutter_test:
