@@ -140,6 +140,7 @@ class QuillEditorController extends GetxController {
     );
   }
 
+/*
   Future<void> saveEditedText() async {
     final directory = await getExternalStorageDirectory();
     final filePath =
@@ -150,6 +151,39 @@ class QuillEditorController extends GetxController {
     await file.writeAsString(plainText);
 
     Get.snackbar("Success", "File saved at $filePath");
+  }
+*/
+
+  Future<void> saveEditedText() async {
+    String? filePath;
+
+    if (Platform.isAndroid) {
+      final directory = await getExternalStorageDirectory();
+      if (directory != null) {
+        filePath =
+            '${directory.path}/edited_text_${DateTime.now().millisecondsSinceEpoch}.txt';
+      } else {
+        Get.snackbar('Error', 'Unable to access external storage');
+
+        return;
+      }
+    } else if (Platform.isIOS || Platform.isWindows) {
+      final directory = await getApplicationDocumentsDirectory();
+      filePath =
+          '${directory.path}/edited_text_${DateTime.now().millisecondsSinceEpoch}.txt';
+    } else {
+      Get.snackbar('Error', 'Unsupported platform for file saving');
+
+      return;
+    }
+
+    if (filePath != null) {
+      final file = File(filePath);
+      final plainText = quillController.document.toPlainText();
+      await file.writeAsString(plainText);
+
+      Get.snackbar('Success', 'File saved at $filePath');
+    }
   }
 
   @override
