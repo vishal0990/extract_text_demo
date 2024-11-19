@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:extract_text_demo/permissionHandler.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
@@ -92,7 +93,7 @@ class FileTextExtractor extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = Get.put(FileTextExtractorController());
-
+    storagePermission();
     return Scaffold(
       appBar: AppBar(
         title: const Text("File Text Extractor"),
