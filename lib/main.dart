@@ -1,13 +1,9 @@
-import 'dart:convert';
 import 'dart:io';
 
-import 'package:excel/excel.dart';
-import 'package:extract_text_demo/permissionHandler.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
-import 'package:html/parser.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
@@ -26,7 +22,7 @@ class FileTextExtractor extends StatefulWidget {
 
 class _FileTextExtractorState extends State<FileTextExtractor> {
   String extractedText = "Choose a file to extract text";
-  TextEditingController textController = TextEditingController();
+  bool isLoading = false;
 
   // Pick file from device
   Future<void> pickFile() async {
@@ -37,17 +33,12 @@ class _FileTextExtractorState extends State<FileTextExtractor> {
     }
   }
 
-  // Pick image using camera
-  Future<void> captureImage() async {
-    final picker = ImagePicker();
-    final image = await picker.pickImage(source: ImageSource.camera);
-    if (image != null) {
-      processFile(image.path);
-    }
-  }
-
-  // Detect file type and process accordingly
+  // Process the file and extract text
   Future<void> processFile(String filePath) async {
+    setState(() {
+      isLoading = true;
+    });
+
     try {
       String fileExtension = filePath.split('.').last.toLowerCase();
       String text;
@@ -61,49 +52,29 @@ class _FileTextExtractorState extends State<FileTextExtractor> {
         case 'png':
           text = await extractTextFromImage(filePath);
           break;
-        case 'docx':
-          text = await extractTextFromExcel(filePath);
-          break;
-        case 'xlsx':
-          text = await extractTextFromExcel(filePath);
-          break;
         case 'txt':
           text = await extractTextFromTxt(filePath);
-          break;
-        case 'json':
-          text = await extractTextFromJson(filePath);
-          break;
-        case 'html':
-          text = await extractTextFromHtml(filePath);
           break;
         default:
           text = "Unsupported file type: $fileExtension";
       }
 
-      setState(() {
-        extractedText = text;
-      });
-      textController.text =
-          extractedText; // Pre-fill the editor with extracted text
+      // Navigate to the full-page editor with Quill
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => QuillEditorPage(initialText: text),
+        ),
+      );
     } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e")),
+      );
+    } finally {
       setState(() {
-        extractedText = "Error: $e";
+        isLoading = false;
       });
     }
-  }
-
-  // Save edited text to a file
-  Future<void> saveTextToFile() async {
-    // Request permission to write to storage (for Android)
-    //PermissionStatus status = await Permission.storage.request();
-    final directory = await getExternalStorageDirectory();
-    final filePath = '${directory!.path}/extracted_text_${DateTime.now()}.txt';
-    final file = File(filePath);
-    await file.writeAsString(textController.text);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('File saved at $filePath')),
-    );
   }
 
   // Extract text from PDF
@@ -122,7 +93,7 @@ class _FileTextExtractorState extends State<FileTextExtractor> {
     return extractedText;
   }
 
-  // Extract text from image
+  // Extract text from Image
   Future<String> extractTextFromImage(String filePath) async {
     final inputImage = InputImage.fromFilePath(filePath);
     final textRecognizer = TextRecognizer();
@@ -130,78 +101,140 @@ class _FileTextExtractorState extends State<FileTextExtractor> {
     return recognizedText.text;
   }
 
-  // Extract text from Excel
-  Future<String> extractTextFromExcel(String filePath) async {
-    var fileBytes = File(filePath).readAsBytesSync();
-    var excel = Excel.decodeBytes(fileBytes);
-    StringBuffer buffer = StringBuffer();
-
-    for (var table in excel.tables.keys) {
-      for (var row in excel.tables[table]!.rows) {
-        buffer.writeln(row.map((cell) => cell?.value).join(", "));
-      }
-    }
-    return buffer.toString();
-  }
-
-  // Extract text from TXT
+  // Extract text from Txt
   Future<String> extractTextFromTxt(String filePath) async {
     final file = File(filePath);
     return await file.readAsString();
   }
 
-  // Extract text from JSON
-  Future<String> extractTextFromJson(String filePath) async {
-    final file = File(filePath);
-    final jsonData = json.decode(await file.readAsString());
-    return jsonData.toString();
-  }
-
-  // Extract text from HTML
-  Future<String> extractTextFromHtml(String filePath) async {
-    final file = File(filePath);
-    final document = parse(await file.readAsString());
-    return document.body!.text;
-  }
-
   @override
   Widget build(BuildContext context) {
-    storagePermission();
     return Scaffold(
       appBar: AppBar(
         title: const Text("File Text Extractor"),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: SingleChildScrollView(
-          child: Column(
-            children: [
-              TextField(
-                controller: textController,
-                maxLines: null, // Allow multiline text
-                decoration: const InputDecoration(
-                  hintText: 'Edit extracted text here...',
-                ),
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: pickFile,
-                child: const Text("Choose File"),
-              ),
-              const SizedBox(height: 10),
-              ElevatedButton(
-                onPressed: captureImage,
-                child: const Text("Capture Image"),
-              ),
-              const SizedBox(height: 10),
-              ElevatedButton(
-                onPressed: saveTextToFile,
-                child: const Text("Save Extracted Text"),
-              ),
-            ],
+      body: Stack(
+        children: [
+          Center(
+            child: ElevatedButton(
+              onPressed: pickFile,
+              child: const Text("Choose File"),
+            ),
           ),
-        ),
+          if (isLoading)
+            Container(
+              color: Colors.black54,
+              child: const Center(
+                child: CircularProgressIndicator(),
+              ),
+            ),
+        ],
       ),
     );
   }
+}
+
+// Quill Editor Page
+class QuillEditorPage extends StatefulWidget {
+  final String initialText;
+
+  const QuillEditorPage({Key? key, required this.initialText})
+      : super(key: key);
+
+  @override
+  State<QuillEditorPage> createState() => _QuillEditorPageState();
+}
+
+class _QuillEditorPageState extends State<QuillEditorPage> {
+  late quill.QuillController _controller;
+  bool showAndroidKeyboard = true;
+  final FocusNode _androidFocusNode = FocusNode();
+  final FocusNode _customFocusNode = AlwaysDisabledFocusNode();
+
+  @override
+  void dispose() {
+    _androidFocusNode.dispose();
+    _customFocusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Initialize QuillController with the extracted text
+    final doc = quill.Document();
+    doc.insert(0, widget.initialText);
+    _controller = quill.QuillController(
+      document: doc,
+      selection: const TextSelection.collapsed(offset: 0),
+    );
+  }
+
+  Future<void> saveEditedText() async {
+    final directory = await getExternalStorageDirectory();
+    final filePath =
+        '${directory!.path}/edited_text_${DateTime.now().millisecondsSinceEpoch}.txt';
+    final file = File(filePath);
+
+    final plainText = _controller.document.toPlainText();
+    await file.writeAsString(plainText);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('File saved at $filePath')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Edit Extracted Text"),
+        actions: [
+          IconButton(
+            onPressed: saveEditedText,
+            icon: const Icon(Icons.save),
+          ),
+          IconButton(
+              onPressed: () {
+                setState(() {
+                  showAndroidKeyboard = !showAndroidKeyboard;
+
+                  if (!showAndroidKeyboard) {
+                    FocusScope.of(context).unfocus(); // Hides the keyboard
+                  }
+                });
+              },
+              icon: Icon(showAndroidKeyboard
+                  ? Icons.keyboard_alt
+                  : Icons.keyboard_alt_outlined))
+        ],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Container(
+          height: MediaQuery.of(context).size.height * 0.6, // Restrict height
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: SingleChildScrollView(
+            child: quill.QuillEditor(
+              controller: _controller,
+              scrollController: ScrollController(),
+              focusNode:
+                  showAndroidKeyboard ? _androidFocusNode : _customFocusNode,
+              // padding: const EdgeInsets.all(8.0),
+            ),
+          ),
+        ),
+      ),
+      bottomNavigationBar: quill.QuillToolbar.simple(controller: _controller),
+    );
+  }
+}
+
+class AlwaysDisabledFocusNode extends FocusNode {
+  @override
+  bool get hasFocus => false; // Prevents the keyboard from opening
 }
