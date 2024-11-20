@@ -47,6 +47,8 @@ dependencies:
   device_info_plus: ^11.1.1
   flutter_quill:
   get:
+  talker:
+  talker_flutter: ^4.4.7
 
 dev_dependencies:
   flutter_test:
